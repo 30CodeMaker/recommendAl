@@ -153,4 +153,4 @@ if __name__ == '__main__':
     print(f'MAP：{MAP / testData_users_number:.4f}')
 
     print(f'ARP：{ARP / testData_users_number:.4f}')
-    print(f'AUC：{AUC / testData_users_number:.4f}')
+    # print(f'AUC：{AUC / testData_users_number:.4f}')
