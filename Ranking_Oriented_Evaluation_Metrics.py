@@ -18,13 +18,16 @@ if __name__ == '__main__':
     testData_item_users = dict()
     testData_users = set()
     K = 5
-    items = set()
+    items = set(range(1, item_number + 1))
     user_item_rating_martix = np.zeros((user_number + 1, item_number + 1))
 
     # 预测值
     bi = np.zeros(item_number + 1)
     count = 0
+    before_filter_user_items = dict()
     for index, row in u1_base.iterrows():
+        before_filter_user_items.setdefault(row['user_id'], set())
+        before_filter_user_items[row['user_id']].add(row['item_id'])
         if row['rating'] > 3:
             count += 1
             items.add(row['item_id'])
@@ -82,6 +85,7 @@ if __name__ == '__main__':
         AUCu = 0.0
 
         diff = list(items - user_items[user])
+        diff_len = len(diff)
         diff.sort(key=lambda x: bi[x], reverse=True)
 
         for i in range(K):
@@ -121,10 +125,12 @@ if __name__ == '__main__':
         if min_location != 100000:
             MRR += 1 / min_location
 
-        diff_len = len(diff)
         unlike_item_set = set(diff) - testData_user_items[user]
+
+        RPu = 0.0
         for item in testData_user_items[user]:
             l = diff.index(item) + 1
+            RPu += l / diff_len
             APu = 0.0
             for i in range(l):
                 if diff[i] in testData_user_items[user]:
@@ -134,16 +140,10 @@ if __name__ == '__main__':
 
             for unlike_item in unlike_item_set:
                 if bi[item] > bi[unlike_item]:
-                # if diff.index(item)<diff.index(unlike_item):
                     AUCu += 1
 
-        RPu = 0.0
-        for item in testData_user_items[user]:
-            loc = diff.index(item) + 1
-            RPu += loc/diff_len
         RPu /= len(testData_user_items[user])
         ARP += RPu
-
 
         AUC += AUCu/(len(testData_user_items[user])*len(unlike_item_set))
 

@@ -69,8 +69,8 @@ def IOCCF(user_items, item_users, K, user_number, item_number, recommend_number,
     Pre_K /= len(testData_users)
     Rec_K /= len(testData_users)
     print('IOCCF:')
-    print(f'Pre@{recommend_number}:{Pre_K}')
-    print(f'Rec@{recommend_number}:{Rec_K}')
+    print(f'Pre@{recommend_number}:{Pre_K:.4f}')
+    print(f'Rec@{recommend_number}:{Rec_K:.4f}')
 
 
 def UOCCF_predict(item_users, user_user_sim, i, j, user_K_Neibors):
@@ -118,8 +118,8 @@ def UOCCF(user_items, item_users, K, user_number, item_number, recommend_number,
     Pre_K /= len(testData_users)
     Rec_K /= len(testData_users)
     print('UOCCF:')
-    print(f'Pre@{recommend_number}:{Pre_K}')
-    print(f'Rec@{recommend_number}:{Rec_K}')
+    print(f'Pre@{recommend_number}:{Pre_K:.4f}')
+    print(f'Rec@{recommend_number}:{Rec_K:.4f}')
 
 def HybridOCCF(IOCCF_user_item_rating_prediction,UOCCF_user_item_rating_prediction,items,testData_users,testData_user_items,recommend_number,a=0.5):
     Pre_K =0.0
@@ -134,8 +134,8 @@ def HybridOCCF(IOCCF_user_item_rating_prediction,UOCCF_user_item_rating_predicti
     Pre_K /= len(testData_users)
     Rec_K /= len(testData_users)
     print('HybridOCCF:')
-    print(f'Pre@{recommend_number}:{Pre_K}')
-    print(f'Rec@{recommend_number}:{Rec_K}')
+    print(f'Pre@{recommend_number}:{Pre_K:.4f}')
+    print(f'Rec@{recommend_number}:{Rec_K:.4f}')
 
 if __name__ == '__main__':
     # IOCCF 基于物品的协同过滤算法
