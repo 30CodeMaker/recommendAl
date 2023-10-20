@@ -1,117 +1,133 @@
-import pandas as pd
+import math
+import random
+
 import numpy as np
+import pandas as pd
 import time
 from tqdm import tqdm
-import heapq
-def top_k_heap(nums, k,items_items_sim):
-    """
-    :param nums: List
-    :param k: int
-    :return: List
-    """
-    heap = []
-    for i in range(len(nums)):
-        if len(heap) < k:
-            heapq.heappush(heap, nums[i])
-        else:
-            if items_items_sim[nums[i]] > items_items_sim[heap[0]]:
-                heapq.heappop(heap)
-                heapq.heappush(heap, nums[i])
-    return heap
 
-def IOCCF_predict(user_items, items_items_sim, i, j, item_K_Neibors):
-    Nj = set(item_K_Neibors[j]) & user_items[i]
-    if len(Nj) == 0:
-        return 0
-    rui = 0.0
-    for item in Nj:
-        rui += items_items_sim[item][j]
-    return rui
+class FISM_rmse:
+    def __init__(self, train_data_file, test_data_file,T=5,d=20,learning_rate=0.01,regularization=0.001,alpha=0.5,p=3):
+        #initialize the model parameters
+        self.p = p
+        self.T = T
+        self.d = d
+        self.alpha = alpha
+        self.learning_rate = learning_rate
+        self.regularization = regularization
+        self.user_num = 943
+        self.item_num = 1682
+        self.items = set(range(1,self.item_num+1))
+        self.bi = np.zeros(self.item_num+1)
+        self.bu = np.zeros(self.user_num+1)
+        self.user_item_matrix = np.zeros((self.user_num+1,self.item_num+1))
 
-# 基于物品的协同过滤算法
-def IOCCF(user_items, item_users, K, user_number, item_number, recommend_number, testData_users, testData_user_items,
-          items):
+        #load the data and process it
+        u_train = pd.read_csv(train_data_file, sep='\t', header=None,names=['user_id', 'item_id', 'rating', 'timestamp'])
+        u_train = u_train[u_train['rating'] > 3]
+        self.observed_records = []
+        u_test = pd.read_csv(test_data_file, sep='\t', header=None,names=['user_id', 'item_id', 'rating', 'timestamp'])
+        self.train_user_items = {}
+        self.train_item_users = {}
+        count = 0
+        for index,row in u_train.iterrows():
+            count += 1
+            self.user_item_matrix[row['user_id']][row['item_id']] = 1
+            self.train_item_users.setdefault(row['item_id'],set())
+            self.train_user_items.setdefault(row['user_id'],set())
+            self.train_item_users[row['item_id']].add(row['user_id'])
+            self.train_user_items[row['user_id']].add(row['item_id'])
+            self.observed_records.append((row['user_id'], row['item_id'], 1))
 
-    items_items_sim = np.zeros((item_number + 1, item_number + 1))
-    for i in range(1, item_number + 1):
-        item_users.setdefault(i, set())
+        self.unobserved_records = []
+        self.test_data_users = set()
+        self.test_user_items = {}
+        for index, row in u_test.iterrows():
+            if row['rating'] > 3:
+                self.test_user_items.setdefault(row['user_id'], set())
+                self.test_user_items[row['user_id']].add(row['item_id'])
+                self.test_data_users.add(row['user_id'])
 
-    for i in range(1, item_number + 1):
-        for j in range(i + 1, item_number + 1):
-            if len(item_users[i] | item_users[j]) != 0:
-                items_items_sim[i][j] = len(item_users[i] & item_users[j]) / len(item_users[i] | item_users[j])
-                items_items_sim[j][i] = items_items_sim[i][j]
+        #compute the bias of each item
+        miu = count / (self.item_num * self.user_num)
+        for i in range(1,self.item_num+1):
+            self.train_item_users.setdefault(i,set())
+            self.bi[i] = self.train_item_users[i].__len__() / self.user_num - miu
 
-    user_item_rating_prediction = np.zeros((user_number + 1, item_number + 1))
-    item_K_Neibors = dict()
-    for i in range(1,item_number+1):
-        item_K_Neibors.setdefault(i, set(range(1,item_number+1)))
-        item_K_Neibors[i] = sorted(item_K_Neibors[i], key=lambda x: items_items_sim[i][x], reverse=True)[0:K]
-    # for i in range(1, user_number + 1):
-    #     user_items.setdefault(i, set())
-    #     for j in range(1, item_number + 1):
-    #         if j in user_items[i]:
-    #             continue
-    #         else:
-    #             user_item_rating_prediction[i][j] = IOCCF_predict(user_items, item_users, items_items_sim, i, j, K)
+        for i in range(1,self.user_num+1):
+            self.train_user_items.setdefault(i,set())
+            self.bu[i] = self.train_user_items[i].__len__() / self.item_num - miu
 
-    # 计算精确率
-    Pre_K = 0.0
-    Rec_K = 0.0
+        for i in range(1,self.user_num+1):
+            for j in range(1,self.item_num+1):
+                if self.user_item_matrix[i][j] == 0:
+                    self.unobserved_records.append((i,j,0))
 
-    for i in tqdm(range(len(testData_users))):
-        user = testData_users[i]
-        diff = list(items - user_items[user])
+        #initialize the latent matrix
+        self.V = np.random.rand(self.item_num+1,self.d)
+        self.W = np.random.rand(self.item_num+1,self.d)
+        self.V = (self.V - 0.5) * 0.01
+        self.W = (self.W - 0.5) * 0.01
+
+    def predict(self,user_id,item_id):
+        U_ = np.zeros(self.d, dtype=float)
+        diff = self.train_user_items[user_id] - {item_id}
+        rating_count = len(diff)
+        if rating_count <= 0:
+            return self.bu[user_id] + self.bi[item_id],diff,U_
         for item in diff:
-                user_item_rating_prediction[user][item] = IOCCF_predict(user_items, items_items_sim, user, item, item_K_Neibors)
-        diff = sorted(diff, key=lambda x: user_item_rating_prediction[user][x], reverse=True)[0:recommend_number]
-        Pre_K += len(set(diff) & testData_user_items[user]) / recommend_number
-        Rec_K += len(set(diff) & testData_user_items[user]) / len(testData_user_items[user])
-    Pre_K /= len(testData_users)
-    Rec_K /= len(testData_users)
-    print('IOCCF:')
-    print(f'Pre@{recommend_number}:{Pre_K}')
-    print(f'Rec@{recommend_number}:{Rec_K}')
+            U_ = U_ + self.W[item]
+        U_ = U_ / math.pow(rating_count, self.alpha)
+        return np.dot(U_, self.V[item_id]) + self.bu[user_id] + self.bi[item_id],diff,U_
 
+    def train(self):
+        unobserved_records_length = len(self.unobserved_records)
+        sample_length = len(self.observed_records) * self.p
+        observed_records_set = set(self.observed_records)
+        for t in tqdm(range(self.T)):
+            all_index = range(unobserved_records_length)
+            sample_index = random.sample(all_index, sample_length)
+            sample_set = set()
+            for i in sample_index:
+                sample_set.add(self.unobserved_records[i])
+            total_set = sample_set | observed_records_set
+            for record in total_set:
+                user_id =record[0]
+                item_id = record[1]
+
+                r_prediction,diff,U_ = self.predict(user_id,item_id)
+                eui = record[2] - r_prediction
+                if len(diff) != 0:
+                    fm = math.pow(len(diff), self.alpha)
+                    self.W[list(diff)] -= self.learning_rate * (
+                                self.regularization * self.W[list(diff)] - (eui / fm) * self.V[list(diff)])
+                gradient_V = self.regularization * self.V[item_id] - eui * U_
+                gradient_bu = self.regularization * self.bu[user_id] - eui
+                gradient_bi = self.regularization * self.bi[item_id] - eui
+                self.V[item_id] -= self.learning_rate * gradient_V
+                self.bu[user_id] -= self.learning_rate * gradient_bu
+                self.bi[item_id] -= self.learning_rate * gradient_bi
+    def test(self,recommend_num=5):
+        Pre_K = 0.0
+        Rec_K = 0.0
+        #compute the precision and recall of the model on test data set while the recommendation list length is 5
+        for user in self.test_data_users:
+            diff = self.items - self.train_user_items[user]
+            user_item_rating_prediction = np.zeros(self.item_num+1)
+            for item in diff:
+                user_item_rating_prediction[item],temp,U_ = self.predict(user,item)
+            diff = set(sorted(diff, key=lambda x: user_item_rating_prediction[x], reverse=True)[0:recommend_num])
+            Pre_K += len(diff & self.test_user_items.get(user,set())) / recommend_num
+            Rec_K += len(diff & self.test_user_items.get(user,set())) / len(self.test_user_items.get(user,set()))
+        Pre_K /= len(self.test_data_users)
+        Rec_K /= len(self.test_data_users)
+        print(f'Pre@{recommend_num}:{Pre_K:.4f}')
+        print(f'Rec@{recommend_num}:{Rec_K:.4f}')
 
 if __name__ == '__main__':
-    # IOCCF 基于物品的协同过滤算法
-    # UOCCF 基于用户的协同过滤算法
-    start_time = time.time()
-    u1_base = pd.read_csv('input/ml-100k/u1.base', header=None, sep='\t',
-                          names=['user_id', 'item_id', 'rating', 'timestamp'])
-    u1_test = pd.read_csv('input/ml-100k/u1.test', header=None, sep='\t',
-                          names=['user_id', 'item_id', 'rating', 'timestamp'])
-    user_number = 943
-    item_number = 1682
-    user_items = dict()
-    item_users = dict()
-    testData_user_items = dict()
-    testData_item_users = dict()
-    items = set()
-    testData_users = set()
-    K = 50
-    recommend_number = 5
-
-    for index, row in u1_base.iterrows():
-        if row['rating'] > 3:
-            items.add(row['item_id'])
-            user_items.setdefault(row['user_id'], set())
-            user_items[row['user_id']].add(row['item_id'])
-            item_users.setdefault(row['item_id'], set())
-            item_users[row['item_id']].add(row['user_id'])
-
-    for index, row in u1_test.iterrows():
-        if row['rating'] > 3:
-            items.add(row['item_id'])
-            testData_user_items.setdefault(row['user_id'], set())
-            testData_user_items[row['user_id']].add(row['item_id'])
-            testData_item_users.setdefault(row['item_id'], set())
-            testData_item_users[row['item_id']].add(row['user_id'])
-            testData_users.add(row['user_id'])
-
-    testData_users  = list(testData_users)
-    IOCCF(user_items, item_users, K, user_number, item_number, recommend_number, testData_users, testData_user_items,
-          items)
-    end_time = time.time()
-    print('cost %f seconds' % (end_time - start_time))
+    start = time.time()
+    FISM = FISM_rmse('input/ml-100k/u1.base', 'input/ml-100k/u1.test')
+    FISM.train()
+    FISM.test()
+    end = time.time()
+    print(f'Running time:{end-start:.2f}s')
