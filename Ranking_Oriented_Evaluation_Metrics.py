@@ -18,7 +18,7 @@ if __name__ == '__main__':
     testData_item_users = dict()
     testData_users = set()
     K = 5
-    items = set(range(1, item_number + 1))
+    items = set()
     user_item_rating_martix = np.zeros((user_number + 1, item_number + 1))
 
     # 预测值
@@ -44,7 +44,6 @@ if __name__ == '__main__':
             testData_item_users.setdefault(row['item_id'], set())
             testData_item_users[row['item_id']].add(row['user_id'])
             testData_users.add(row['user_id'])
-
     miu = count / (user_number * item_number)
 
     for i in range(item_number + 1):
@@ -72,7 +71,6 @@ if __name__ == '__main__':
     # 计算曲线下面积
     AUC = 0.0
 
-
     # 测试集的用户数量
     testData_users_number = len(testData_users)
     # PopRank算法实现
@@ -85,12 +83,11 @@ if __name__ == '__main__':
         AUCu = 0.0
 
         diff = list(items - user_items[user])
-        diff_len = len(diff)
         diff.sort(key=lambda x: bi[x], reverse=True)
 
         for i in range(K):
             l = i + 1
-            if diff[i] in testData_user_items[user]:
+            if diff[i] in testData_user_items[user] :
                 min_location = min(min_location, l)
                 pre_count += 1
                 DCG_Ku += 1 / math.log(l + 1, 2)
@@ -127,22 +124,26 @@ if __name__ == '__main__':
 
         unlike_item_set = set(diff) - testData_user_items[user]
 
-        RPu = 0.0
         for item in testData_user_items[user]:
             l = diff.index(item) + 1
-            RPu += l / diff_len
             APu = 0.0
             for i in range(l):
                 if diff[i] in testData_user_items[user]:
                     APu += 1
             APu /= l
-            MAP += APu / len(testData_user_items[user])
+            APu /= len(testData_user_items[user])
+            MAP += APu
 
             for unlike_item in unlike_item_set:
                 if bi[item] > bi[unlike_item]:
                     AUCu += 1
 
-        RPu /= len(testData_user_items[user])
+        diff_len = len(items) - len(user_items[user])
+        RPu = 0.0
+        for item in testData_user_items[user]:
+            l = diff.index(item) + 1
+            RPu += l
+        RPu = RPu/(len(testData_user_items[user])*diff_len)
         ARP += RPu
 
         AUC += AUCu/(len(testData_user_items[user])*len(unlike_item_set))
@@ -152,8 +153,8 @@ if __name__ == '__main__':
     print(f'F1@{K}：{F1_K / testData_users_number:.4f}')
     print(f'NDCG@{K}：{NDCG_K / testData_users_number:.4f}')
     print(f'1-call@{K}：{one_call_K / testData_users_number:.4f}')
-    print(f'MRR：{MRR / testData_users_number:.4f}')
-    print(f'MAP：{MAP / testData_users_number:.4f}')
+    print(f'MRR：{MRR / testData_users_number}')
+    print(f'MAP：{MAP / testData_users_number}')
 
     print(f'ARP：{ARP / testData_users_number:.4f}')
     print(f'AUC：{AUC / testData_users_number:.4f}')
