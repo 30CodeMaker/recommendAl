@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 
 class FISM_rmse:
-    def __init__(self, train_data_file, test_data_file, T=100, d=20, learning_rate=0.01, regularization=0.001, alpha=0.5,
+    def __init__(self, train_data_file, test_data_file, T=5, d=20, learning_rate=0.01, regularization=0.001, alpha=0.5,
                  p=3):
         # initialize the model parameters
         self.p = p
@@ -69,25 +69,24 @@ class FISM_rmse:
         self.V = np.random.rand(self.item_num + 1, self.d)
         self.W = np.random.rand(self.item_num + 1, self.d)
 
-        for i in range(1, self.item_num + 1):
-            for j in range(d):
-                self.V[i][j] = (self.V[i][j] - 0.5) * 0.01
-                self.W[i][j] = (self.W[i][j] - 0.5) * 0.01
+        self.V = (self.V - 0.5) * 0.01
+        self.W = (self.W - 0.5) * 0.01
 
     def predict(self, user_id, item_id):
         U_ = np.zeros(self.d, dtype=float)
         diff = self.train_user_items[user_id] - {item_id}
         rating_count = len(diff)
         if rating_count <= 0:
-            return self.bu[user_id] + self.bi[item_id]
+            return self.bu[user_id] + self.bi[item_id], diff, U_
         for item in diff:
             U_ = U_ + self.W[item]
         U_ = U_ / math.pow(rating_count, self.alpha)
-        return np.dot(U_, self.V[item_id]) + self.bu[user_id] + self.bi[item_id]
+        return np.dot(U_, self.V[item_id]) + self.bu[user_id] + self.bi[item_id], diff, U_
+
     def train(self):
+        unobserved_records_length = len(self.unobserved_records)
+        sample_length = self.p * len(self.observed_records)
         for t in tqdm(range(self.T)):
-            unobserved_records_length = len(self.unobserved_records)
-            sample_length = self.p * len(self.observed_records)
             all_index = range(unobserved_records_length)
             sample_index = random.sample(all_index, sample_length)
             sample_set = set()
@@ -97,7 +96,9 @@ class FISM_rmse:
             for record in total_set:
                 user_id = record[0]
                 item_id = record[1]
-                diff = list(set(self.train_user_items[user_id]) - {item_id})
+
+                r_prediction ,diff, U_ = self.predict(user_id,item_id)
+
                 if len(diff) <= 0:
                     continue
                 U_ = np.zeros(self.d, dtype=float)
@@ -105,21 +106,21 @@ class FISM_rmse:
                     U_ = U_ + self.W[item]
                 U_ = U_ / math.pow(len(diff), self.alpha)
 
-                r_prediction = self.bu[user_id] + self.bi[item_id] + np.dot(U_, self.V[item_id])
+                # r_prediction = self.bu[user_id] + self.bi[item_id] + np.dot(U_, self.V[item_id])
                 eui = record[2] - r_prediction
 
+                self.W[list(diff)] -= self.learning_rate * (
+                        self.regularization * self.W[list(diff)] - eui * math.pow(len(diff), -self.alpha) * self.V[
+                    item_id])
+
                 gradient_bu = self.regularization * self.bu[user_id] - eui
-                self.bu[user_id] -= self.learning_rate * gradient_bu
-
-                gradient_bi = self.regularization * self.bi[item_id] - eui
-                self.bi[item_id] -= self.learning_rate * gradient_bi
-
                 gradient_V = self.regularization * self.V[item_id] - eui * U_
+                gradient_bi = self.regularization * self.bi[item_id] - eui
+
+                self.bi[item_id] -= self.learning_rate * gradient_bi
+                self.bu[user_id] -= self.learning_rate * gradient_bu
                 self.V[item_id] -= gradient_V * self.learning_rate
 
-                self.W[diff] -= self.learning_rate * (
-                            self.regularization * self.W[diff] - eui * math.pow(len(diff), -self.alpha) * self.V[
-                        item_id])
 
     def test(self, recommend_num=5):
         Pre_K = 0.0
@@ -129,14 +130,7 @@ class FISM_rmse:
             diff = self.items - self.train_user_items[user]
             user_item_rating_prediction = np.zeros(self.item_num + 1)
             for item in diff:
-                if len(self.train_user_items[user]) == 0:
-                    user_item_rating_prediction[item] = self.bi[item] + self.bu[user]
-                else:
-                    U_ = np.zeros(self.d, dtype=float)
-                    for item_ in self.train_user_items[user]:
-                        U_ = U_ + self.W[item_]
-                    U_ /= math.pow(len(self.train_user_items[user]), self.alpha)
-                    user_item_rating_prediction[item] = self.bi[item] + self.bu[user] + np.dot(U_, self.V[item])
+                user_item_rating_prediction[item] = self.predict(user,item)[0]
 
             diff = set(sorted(diff, key=lambda x: user_item_rating_prediction[x], reverse=True)[0:recommend_num])
             Pre_K += len(diff & self.test_user_items.get(user, set())) / recommend_num

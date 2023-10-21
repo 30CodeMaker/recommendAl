@@ -5,7 +5,6 @@ import pandas as pd
 import time
 from tqdm import tqdm
 
-
 class FISM_rmse:
     def __init__(self, train_data_file, test_data_file, T=3, d=20, learning_rate=0.01, regularization=0.001, alpha=0.5,
                  p=3):
@@ -98,8 +97,8 @@ class FISM_rmse:
         unobserved_records_length = len(self.unobserved_records)
         sample_length = len(self.observed_records) * self.p
         observed_records_set = set(self.observed_records)
-        all_index = range(unobserved_records_length)
         for t in tqdm(range(self.T)):
+            all_index = range(unobserved_records_length)
             sample_index = random.sample(all_index, sample_length)
             sample_set = set()
             for i in sample_index:
@@ -114,6 +113,7 @@ class FISM_rmse:
                     continue
                 r_prediction = np.dot(U_, self.V[item_id]) + self.bu[user_id] + self.bi[item_id]
                 eui = record[2] - r_prediction
+
                 fm = math.pow(len(diff), self.alpha)
                 self.W[list(diff)] -= self.learning_rate * (
                         self.regularization * self.W[list(diff)] - (eui / fm) * self.V[list(diff)])
