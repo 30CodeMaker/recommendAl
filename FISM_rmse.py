@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 
 class FISM_rmse:
-    def __init__(self, train_data_file, test_data_file, T=3, d=20, learning_rate=0.01, regularization=0.001, alpha=0.5,
+    def __init__(self, train_data_file, test_data_file, T=5, d=20, learning_rate=0.01, regularization=0.001, alpha=0.5,
                  p=3):
         # initialize the model parameters
         self.p = p
@@ -83,17 +83,6 @@ class FISM_rmse:
         U_ = U_ / math.pow(rating_count, self.alpha)
         return np.dot(U_, self.V[item_id]) + self.bu[user_id] + self.bi[item_id], diff, U_
 
-    def get_uu_i(self,uu, ii):
-        i_set = {ii}
-        iu_minus_i = list(set(self.train_user_items[uu]) - i_set)
-        uu_i = np.zeros(self.d, dtype=float)
-        if len(iu_minus_i) <= 0:
-            return iu_minus_i, uu_i
-        for iii in iu_minus_i:
-            uu_i = uu_i + self.W[iii]
-        uu_i = uu_i / math.pow(len(iu_minus_i), self.alpha)
-        return iu_minus_i, uu_i
-
     def train(self):
         unobserved_records_length = len(self.unobserved_records)
         sample_length = len(self.observed_records) * self.p
@@ -109,14 +98,14 @@ class FISM_rmse:
                 user_id = record[0]
                 item_id = record[1]
 
-                diff,U_ = self.get_uu_i(user_id,item_id)
-                if len(diff)<=0:
-                    continue
-                r_prediction = np.dot(U_, self.V[item_id]) + self.bu[user_id] + self.bi[item_id]
+                r_prediction, diff, U_ = self.predict(user_id, item_id)
                 eui = record[2] - r_prediction
-                fm = math.pow(len(diff), self.alpha)
-                self.W[list(diff)] -= self.learning_rate * (
-                        self.regularization * self.W[list(diff)] - (eui / fm) * self.V[list(diff)])
+                if len(diff) == 0:
+                    continue
+                else:
+                    fm = math.pow(len(diff), self.alpha)
+                    self.W[list(diff)] -= self.learning_rate * (
+                            self.regularization * self.W[list(diff)] - (eui / fm) * self.V[list(diff)])
 
                 gradient_V = self.regularization * self.V[item_id] - eui * U_
                 gradient_bu = self.regularization * self.bu[user_id] - eui
