@@ -1,4 +1,3 @@
-import math
 import random
 import numpy as np
 import pandas as pd
@@ -6,7 +5,7 @@ import time
 from tqdm import tqdm
 
 
-class FISM_rmse:
+class MFLogLoss:
     def __init__(self, train_data_file, test_data_file, T=100, d=20, learning_rate=0.01, regularization=0.001, alpha=0.5,
                  p=3):
         # initialize the model parameters
@@ -63,25 +62,17 @@ class FISM_rmse:
         for i in range(1, self.user_num + 1):
             for j in range(1, self.item_num + 1):
                 if self.user_item_matrix[i][j] == 0:
-                    self.unobserved_records.append((i, j, 0))
+                    self.unobserved_records.append((i, j, -1))
 
         # initialize the latent matrix
         self.V = np.random.rand(self.item_num + 1, self.d)
-        self.W = np.random.rand(self.item_num + 1, self.d)
+        self.U = np.random.rand(self.user_num + 1, self.d)
 
         self.V = (self.V - 0.5) * 0.01
-        self.W = (self.W - 0.5) * 0.01
+        self.U = (self.U - 0.5) * 0.01
 
     def predict(self, user_id, item_id):
-        U_ = np.zeros(self.d, dtype=float)
-        diff = self.train_user_items[user_id] - {item_id}
-        rating_count = len(diff)
-        if rating_count <= 0:
-            return self.bu[user_id] + self.bi[item_id], diff, U_
-        for item in diff:
-            U_ = U_ + self.W[item]
-        U_ = U_ / math.pow(rating_count, self.alpha)
-        return np.dot(U_, self.V[item_id]) + self.bu[user_id] + self.bi[item_id], diff, U_
+        return self.bu[user_id] + self.bi[item_id] + np.dot(self.U[user_id], self.V[item_id])
 
     def train(self):
         unobserved_records_length = len(self.unobserved_records)
@@ -98,21 +89,18 @@ class FISM_rmse:
                 user_id = record[0]
                 item_id = record[1]
 
-                r_prediction, diff, U_ = self.predict(user_id, item_id)
-                eui = record[2] - r_prediction
-                if len(diff) != 0:
-                    fm = math.pow(len(diff), self.alpha)
-                    self.W[list(diff)] -= self.learning_rate * (
-                            self.regularization * self.W[list(diff)] - (eui / fm) * self.V[item_id])
+                r_prediction= self.predict(user_id, item_id)
+                eui = float(record[2]) / (1+np.exp(r_prediction*record[2]))
 
-                gradient_V = self.regularization * self.V[item_id] - eui * U_
+                gradient_U = self.regularization * self.U[user_id] - eui * self.V[item_id]
+                gradient_V = self.regularization * self.V[item_id] - eui * self.U[user_id]
                 gradient_bu = self.regularization * self.bu[user_id] - eui
                 gradient_bi = self.regularization * self.bi[item_id] - eui
 
+                self.U[user_id] -= self.learning_rate * gradient_U
                 self.V[item_id] -= self.learning_rate * gradient_V
                 self.bu[user_id] -= self.learning_rate * gradient_bu
                 self.bi[item_id] -= self.learning_rate * gradient_bi
-
     def test(self, recommend_num=5):
         Pre_K = 0.0
         Rec_K = 0.0
@@ -121,21 +109,20 @@ class FISM_rmse:
             diff = self.items - self.train_user_items[user]
             user_item_rating_prediction = np.zeros(self.item_num + 1)
             for item in diff:
-                user_item_rating_prediction[item], temp, U_ = self.predict(user, item)
+                user_item_rating_prediction[item]= self.predict(user, item)
             diff = set(sorted(diff, key=lambda x: user_item_rating_prediction[x], reverse=True)[0:recommend_num])
             Pre_K += len(diff & self.test_user_items.get(user, set())) / recommend_num
             Rec_K += len(diff & self.test_user_items.get(user, set())) / len(self.test_user_items.get(user, set()))
         Pre_K /= len(self.test_data_users)
         Rec_K /= len(self.test_data_users)
-        print(f"FISM_rmse:")
+        print(f"MFLogLoss:")
         print(f'Pre@{recommend_num}:{Pre_K:.4f}')
         print(f'Rec@{recommend_num}:{Rec_K:.4f}')
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     start = time.time()
-    FISM = FISM_rmse('input/ml-100k/u1.base', 'input/ml-100k/u1.test')
-    FISM.train()
-    FISM.test()
+    mfLogLoss = MFLogLoss('input/ml-100k/u1.base', 'input/ml-100k/u1.test')
+    mfLogLoss.train()
+    mfLogLoss.test()
     end = time.time()
     print(f'Running time:{end - start:.2f}s')

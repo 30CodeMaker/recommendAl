@@ -101,10 +101,10 @@ class FISM_rmse:
 
                 if len(diff) <= 0:
                     continue
-                U_ = np.zeros(self.d, dtype=float)
-                for item in diff:
-                    U_ = U_ + self.W[item]
-                U_ = U_ / math.pow(len(diff), self.alpha)
+                # U_ = np.zeros(self.d, dtype=float)
+                # for item in diff:
+                #     U_ = U_ + self.W[item]
+                # U_ = U_ / math.pow(len(diff), self.alpha)
 
                 # r_prediction = self.bu[user_id] + self.bi[item_id] + np.dot(U_, self.V[item_id])
                 eui = record[2] - r_prediction
