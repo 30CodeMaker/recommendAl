@@ -145,8 +145,11 @@ class FISM_rmse:
 
 if __name__ == '__main__':
     start = time.time()
-    FISM = FISM_rmse('input/ml-100k/u1.base', 'input/ml-100k/u1.test')
-    FISM.train()
-    FISM.test()
+    # FISM = FISM_rmse('input/ml-100k/u1.base', 'input/ml-100k/u1.test')
+    # FISM.train()
+    # FISM.test()
+    setT = {1,2,3}
+    setT.remove(4)
+    print(setT)
     end = time.time()
     print(f'Running time:{end - start:.2f}s')

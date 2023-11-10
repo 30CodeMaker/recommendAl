@@ -103,6 +103,7 @@ class BPR:
             Rec_K += len(diff & self.test_user_items.get(user,set())) / len(self.test_user_items.get(user,set()))
         Pre_K /= len(self.test_data_users)
         Rec_K /= len(self.test_data_users)
+        print("Bayesian Personalized Ranking:")
         print(f'Pre@{recommend_num}:{Pre_K:.4f}')
         print(f'Rec@{recommend_num}:{Rec_K:.4f}')
 

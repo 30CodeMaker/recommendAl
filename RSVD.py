@@ -100,7 +100,7 @@ if __name__ == '__main__':
         for j in range(1,1683):
             if userItem[i][j]!=0:
                 count+=1
-                bu[i] += (userItem[i][j] - ru[i])
+                bu[i] += (userItem[i][j] - ri[j])
         if count!=0:
             bu[i] = bu[i]/count
     #计算物品偏置
@@ -109,7 +109,7 @@ if __name__ == '__main__':
         for i in range(1,944):
             if userItem[i][j]!=0:
                 count+=1
-                bi[j] += (userItem[i][j] - ri[j])
+                bi[j] += (userItem[i][j] - ru[i])
         if count!=0:
             bi[j] = bi[j]/count
 

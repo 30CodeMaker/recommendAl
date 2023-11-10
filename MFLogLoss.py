@@ -121,7 +121,7 @@ class MFLogLoss:
 
 if __name__ == "__main__":
     start = time.time()
-    mfLogLoss = MFLogLoss('input/ml-100k/u1.base', 'input/ml-100k/u1.test')
+    mfLogLoss = MFLogLoss('input/ml-100k/u4.base', 'input/ml-100k/u4.test')
     mfLogLoss.train()
     mfLogLoss.test()
     end = time.time()
